@@ -1,0 +1,9 @@
+tqdm
+numpy
+ray
+zarr
+dill
+pillow
+scikit-image
+mahotas
+sklearn
