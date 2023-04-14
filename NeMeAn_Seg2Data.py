@@ -29,6 +29,7 @@ def _getAMFLabels(isAxon, isMyelin, crop2bbox=True):
     Uses watershed algorithm to associate myelin with individual axons from the interpolated contours between the two masks.
     :param isAxon: Array, binary mask for which pixels are axons. Shape (H,W).
     :param isMyelin: Array, binary mask for which pixels are myelin. Shape (H,W).
+    :param crop2bbox: Bool, whether to crop out the background along edge of masks during compuation to save time. Default is True.
     :return: Integer, number of axons in mask
              Array, integer mask with background at 0 and each axon given a label [1-num_axons]
              Array, integer mask with background at 0 and each myelin given the same label as associated axon
@@ -215,9 +216,10 @@ def _getCellPackingDensity(labeledFibers, fiberPropList, windowShape=(400,400), 
                 fiberCount = uniqueFibers.shape[0]
             densityArea = packingArea*((imgLinearRes/1000)**2) # convert pixel area to mm^2
             fiberDensityArray[f] = (fiberCount/1000) / densityArea # number of 1000 fibers per mm^2
-            return fiberDensityArray, fiberPackingArray
-        else:
-            return fiberPackingArray
+    if return_density:
+        return fiberDensityArray, fiberPackingArray
+    else:
+        return fiberPackingArray
 
 
 def _getNNArea(labeledFibers, imgLinearRes=0.0125, fascicleMask=None):
@@ -275,11 +277,19 @@ def _getNNArea(labeledFibers, imgLinearRes=0.0125, fascicleMask=None):
     # Sum area assigned to each cell label
     # NNArea = (imgLinearRes**2)*np.array([np.count_nonzero(labeledBackground==cellLabel) for cellLabel in range(1,num_fibers+1)])
     labels, counts = np.unique(labeledBackground, return_counts=True)
-    # Exclude counts of extrafascicular space and pixels assigned to it, and convert area from pixels^2 to um^2
+    # # Exclude counts of extrafascicular space and pixels assigned to it, and convert area from pixels^2 to um^2
+    # if labels[0]==0:
+    #     NNArea = counts[1:num_fibers+1]*(imgLinearRes**2)
+    # else:
+    #     NNArea = counts[0:num_fibers]*(imgLinearRes**2)
+    
+    # Exclude counts of extrafascicular space and pixels assigned to it
     if labels[0]==0:
-        NNArea = counts[1:num_fibers+1]*(imgLinearRes**2)
-    else:
-        NNArea = counts[0:num_fibers]*(imgLinearRes**2)
+        labels = labels[1:]
+        counts = counts[1:]
+    # convert area from pixels^2 to um^2
+    NNArea = np.zeros(num_fibers)
+    NNArea[labels-1] = counts*(imgLinearRes**2)
     
     return NNArea
 
@@ -460,7 +470,7 @@ def getCellData(file_img_list, path_img, sampleName_list=[], imgLinearRes=0.125,
         aspectRatio = lambda area, perimeter: 4*np.pi*(area)/perimeter**2
         axonAspectRatioArray = np.zeros((num_fibers))
         if (cellType == 'complete') or (cellType == 'combined'):
-            axonCircularityArray[:num_axons] = np.array([axonPropList[i].axis_minor_length/axonPropList[i].axis_major_length for i in range(num_axons)])
+            axonAspectRatioArray[:num_axons] = np.array([axonPropList[i].axis_minor_length/axonPropList[i].axis_major_length for i in range(num_axons)])
         fiberAspectRatioArray = np.array([fiberPropList[i].axis_minor_length/fiberPropList[i].axis_major_length for i in range(num_fibers)])
         
         
@@ -965,20 +975,23 @@ def _getPixelNNArea(labeledFibers, fiberPropList, axonPropList, imgLinearRes=0.0
     # NNArea = np.array([np.count_nonzero(labeledFascicle==cellLabel) for cellLabel in range(1,num_fibers+1)])
     labels, counts = np.unique(labeledFascicle, return_counts=True) # may miss some labels if we don't count fiber area as part of the measure
     # Exclude counts of extrafascicular space and pixels assigned to it
-    if labels[0]==0:
-        NNArea = counts[1:num_fibers+1]
-    else:
-        NNArea = counts[0:num_fibers]
+    NNArea = np.zeros(num_fibers+1)
+    NNArea[labels] = counts
+    # if labels[0]==0:
+    #     NNArea = counts[1:num_fibers+1]
+    # else:
+    #     NNArea = counts[0:num_fibers]
     
     # Get ratio of fascicle area to fiber area
-    fiberNNRatio = [fiberPropList[cellLabel].area/NNArea[cellLabel] for cellLabel in range(num_fibers)]
-    axonNNRatio = [axonPropList[cellLabel].area/NNArea[cellLabel] for cellLabel in range(num_fibers)]
+    fiberNNRatio = [fiberPropList[cellLabel].area/NNArea[cellLabel+1] for cellLabel in range(num_fibers)]
+    axonNNRatio = [axonPropList[cellLabel].area/NNArea[cellLabel+1] for cellLabel in range(num_fibers)]
     
     # Convert area from pixels^2 to um^2
     NNArea = NNArea*(imgLinearRes**2)
     
     # Set areas outside fascicle mask [0] and the pixels assigned to it [num_fibers+1] to 0
-    NNArea = np.concatenate(([0],NNArea))
+    # NNArea = np.concatenate(([0],NNArea))
+    NNArea[0] = 0
     fiberNNRatio = np.concatenate(([0],fiberNNRatio))
     axonNNRatio = np.concatenate(([0],axonNNRatio))
     
@@ -1261,7 +1274,7 @@ def getPixelData(file_img_list, path_img, sampleName_list=[], imgLinearRes=0.125
     :param getFiberP: Boolean, whether to calculate and return fiber packing. Default is True.
     :param getAxonP: Boolean, whether to calculate and return axon packing. Default is True.
     :param getMyelinP: Boolean, whether to calculate and return myelin packing. Default is True.
-    :param getGP: Boolean, whether to calculate and return g-packing. Default is True.
+    :param getGP: Boolean, whether to calculate and return g-packing. Only checked if both getFiberP and getAxonP are True. Default is True.
     :param getNNratios: Boolean, whether to calculate and return nearest-neighbor area and ratios. Default is True.
     :param res: Float, very small value to avoid devide by zero errors when calculating g-packing.
     
@@ -1301,6 +1314,10 @@ def getPixelData(file_img_list, path_img, sampleName_list=[], imgLinearRes=0.125
         
     # Check if edge mask is to be used
     useEdgeMask = edgeMask_type is not None #len(edgeMask_img_list)>0
+    
+    # If either getFiberP or getAxonP are false, don't calculate g-Packing
+    if getFiberP==False | getAxonP==False:
+        getGP = False
     
     # Setup list for storing sample data [[sample1],...] where each sample is a list [sampleName, cellCount, axonSize, ...]
     samplesList_sampleDataList_pixelDataArray = []
