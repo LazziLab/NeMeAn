@@ -84,7 +84,7 @@ def _calcDist(centroid1, centroid2):
     return dist
 
 def _get_bbox_and_padShape(array):
-    """ Calculates the bounding box of a ndarray and padding needed to recreate ndarray """
+    """ Calculates the bounding box of a 2d-array and padding needed to recreate ndarray """
     # bbox format used by scikit-image.regionprops: (min_row, min_col, max_row, max_col)
     r,c = array.shape
     cols = np.any(array, axis=0)
@@ -107,15 +107,15 @@ def _get_bbox_and_padShape(array):
     padShape = ((rmin,r-rmax-1),(cmin,c-cmax-1))
     return bbox, padShape
 
-def _getCellPackingDensity(labeledFibers, fiberPropList, windowShape=(400,400), imgLinearRes=0.0125,
+def _getCellPackingDensity(labeledFibers, fiberPropList, windowShape=(400,400), imgLinearRes=0.125,
                            edgeCleanMethod='fractional', edgeSize=1, fascicleMask=None, circularWindow=False, return_density=True):
     """
     Computes the cell-wise fiber density and fiber packing by using a window centered on each cell.
     :param labeledFibers: Array, background labeled 0 and each fiber labeled [1-num_axons]. Shape (H,W).
     :param fiberPropList: List, each element describes one labeled fiber (skimage.measure.regionprops). Shape (num_axons).
     :param windowShape: Tuple, 2 integer elements describing the height and width of the window to be used for calculating fiber density and packing. Default is (400,400).
-    :param imgLinearRes: Float, for the um/px resolution of the image. Default is 0.0125.
-    :param edgeCleanMethod: One of {'fractional', 'top_left_cut', 'all_cut'}
+    :param imgLinearRes: Float, for the um/px resolution of the image. Default is 0.125.
+    :param edgeCleanMethod: One of {'fractional', 'top_left_cut', 'all_cut', 'none'}
         Default is 'fractional'.
         - 'fractional': for cells cut by the window, calculates what fraction of the cell is inside the window and uses that for fiber density calculation (only counts portion of cells inside window for packing).
         - 'top_left_cut': ignore cells cut by the top and left edges of the window for fiber density and fiber packing calculations (only counts portion of non-ignored cells inside window for packing).
@@ -123,7 +123,7 @@ def _getCellPackingDensity(labeledFibers, fiberPropList, windowShape=(400,400), 
         - 'none': count all cells cut by the edges of the window for fiber density and fiber packing calculations (only counts portion of cells inside window for packing).
     :param edgeSize: Positive integer, how many pixels away from window edge to not be considered cut by window (only used with 'top_left_cut' and 'all_cut'). Default is 1.
     :param fascicleMask: Bool Array (or None), background labeled False and fascicle labeled True. Shape (H,W). If provided, restricts fiber packing/density window measurements to only the window within fascicles. Default is None.
-    :param circularWindow: Boolean, for whether to use a circular window (with diamter eqaul to shortest value in windowShape) instead of a rectangle.
+    :param circularWindow: Boolean, for whether to use a circular window (with diameter equal to shortest value in windowShape) instead of a rectangle.
     :param return_density: Boolean, for whether to perform the calculation for density and return it.
     :return: 2 Arrays, the first containing the fiber density measured around each labeled cell, the second containing the fiber packing measured around each labeled cell. Each with shape (num_axons).
     """
@@ -222,11 +222,11 @@ def _getCellPackingDensity(labeledFibers, fiberPropList, windowShape=(400,400), 
         return fiberPackingArray
 
 
-def _getNNArea(labeledFibers, imgLinearRes=0.0125, fascicleMask=None):
+def _getNNArea(labeledFibers, imgLinearRes=0.125, fascicleMask=None):
     """
     Uses watershed algorithm to associate myelin with individual axons from the interpolated contours between the two masks.
     :param labeledFibers: Array, background labeled 0 and each fiber labeled [1-num_axons]. Shape (H,W).
-    :param imgLinearRes: Float, for the um/px resolution of the image. Default is 0.0125.
+    :param imgLinearRes: Float, for the um/px resolution of the image. Default is 0.125.
     :param fascicleMask: Bool Array (or None), background labeled False and fascicle labeled True. Shape (H,W). If provided, restricts area measurements to only within fascicles. Default is None.
     :return: Array (shape: num_fibers), returns area (um^2) of image background closest to each cell. If fascicleMask is provided, area is restricted to only within fascicle mask.
     """
@@ -304,30 +304,29 @@ def getCellData(file_img_list, path_img, sampleName_list=[], imgLinearRes=0.125,
     Computes metrics for each cell in each image and combines cell data from multiple images of the same sample.
     :param file_img_list: List of image file names.
     :param path_img: String, path to folder where the segmentation images are stored and where the cleaned images will be saved.
-    :param addLabelSuffix: Boolean, whether to modify image file names with default suffix for cleaned label masks. Default is True. (Default suffix is '_labelmask_cleaned.png')
     :param sampleName_list: List of strings (same length as file_img_list). Each string is used as a label for the sample at the same index.
     :param imgLinearRes: Float, for the um/px resolution of the image. Default is 0.125.
     :param maskLabels: list of 3 sublists of integers, first sublist contains labels for axon, second sublist contains labels for myelin, third sublist contains labels for collapsed myelin
     :param cellType: String, one of {'complete', 'collapsed', 'combined'}. Defines if labeled cells include only myelinated fibers ('complete'), only degenerated fibers missing an axon ('collapsed'), or both ('combined'). Default is 'complete'.
-    :param detailedCombined: Boolean, whether to also calculate structural metrics for each cell type individually. Default is 'complete'.
+    :param detailedCombined: Boolean, whether to also calculate structural metrics for each cell type individually. Default is True.
     :param ldStart: Integer, when calculating local density coefficient and exponent, ignore cells before the (ldStart)th-nearest neighbor. Minimum 1 (0th-nearest neighbor is self and must be excluded)
     :param ldStop: Integer or 'MAX', when calculating local density coefficient and exponent, ignore cells after the (ldStop)th-nearest neighbor. 'MAX' includes all cells after ldStart. Minimum ldStart+1 (must be larger than ldStart)
-    :param save_path: String, path to folder where generated filess will be saved. If not provided, will save to path_img.
+    :param save_path: String, path to folder where generated files will be saved. If not provided, will save to path_img.
     :param edgeMask_type: String, one of {'mask', 'label', None}. This determines how feature information is read for calculating each cell's distance from that feature.
                           'mask' is used when a separate binary mask is being provided for the feature. 'label' is used when the feature is labeled in images in file_img_list. None is used when no distance is to be calculated. Default is None.
-    :param edgeMaskLabels: List of integers, defining the labels from which to calculate the distance each cell is.
+    :param edgeMaskLabels: List of integers, defining the labels from which to calculate the distance of each cell.
     :param edgeMask_img_list: List of binary edge mask file names (must have same size as file_img_list). If not empty, calculate the distance of each cell from edges of true labels in mask.
     :param edgeDist_Name: String, name to label edgeMask distance data.
     
     :param windowShapes_list: List of 2-element Tuples, 2 integer elements describing the height and width of the window to be used for calculating fiber density and packing. Default is (400,400).
-    :param edgeCleanMethod: String, one of {'fractional', 'top_left_cut', 'all_cut'}
+    :param edgeCleanMethod: String, one of {'fractional', 'top_left_cut', 'all_cut', 'none'}
         Default is 'fractional'.
         - 'fractional': for cells cut by the window, calculates what fraction of the cell is inside the window and uses that for fiber density calculation (only counts portion of cells inside window for packing).
         - 'top_left_cut': ignore cells cut by the top and left edges of the window for fiber density and fiber packing calculations (only counts portion of non-ignored cells inside window for packing).
         - 'all_cut': ignore all cells cut by the edges of the window for fiber density and fiber packing calculations.
         - 'none': count all cells cut by the edges of the window for fiber density and fiber packing calculations (only counts portion of cells inside window for packing).
     :param edgeSize: Positive integer, how many pixels away from window edge to not be considered cut by window (only used with 'top_left_cut' and 'all_cut'). Default is 1.
-    :param circularWindow: Boolean, for whether to use a circular window (with diamter eqaul to shortest value in windowShape) instead of a rectangle.
+    :param circularWindow: Boolean, for whether to use a circular window (with diameter equal to shortest value in windowShape) instead of a rectangle.
     :param fascicleMask_img_list: List of image file names for fascicle masks [Bool Arrays, background labeled False and fascicle labeled True. Same shape as associated segmented images]. If provided, restricts fiber packing/density window measurements to only the window within fascicles. Default is None.
     :param excludeMask_img_list: List  of image file names for exclude masks [Bool Arrays, background labeled False and regions to exclude from fascicles labeled True. Same shape as associated segmented images]. If provided with fascicle mask, restricts fiber packing/density window measurements to only the window within fascicles but outside exclusion zones.
                                  Usefull when portions of images have poor quality preventing accurate segmentation. Default is None.
@@ -790,8 +789,8 @@ def _arraySum_chunked(coordi, chunkSize, paddedFibers, window):
     Remote code for parallel calculation of convolution for a chunk of the sample for density and packing measurements.
     :param coordi: Coordinate, produced by np.ndindex(), for which chunk to convolve over.
     :param chunkSize: 2 Integer Array, descibes the shape of chunks for parallel processing.
-    :param paddedFibers: Boolean, whether to modify image file names with default suffix for cleaned label masks. Default is True. (Default suffix is '_labelmask_cleaned.png')
-    :param window: List of strings (same length as file_img_list). Each string is used as a label for the sample at the same index.
+    :param paddedFibers: Float Array to be convolutionally summed.
+    :param window: Array, convolutional kernel used for summation in density and packing measurements.
     
     :return: Nothing
     """
@@ -815,10 +814,10 @@ def _arraySum_chunked(coordi, chunkSize, paddedFibers, window):
 def _getPaddedSum(Mask, window, chunkSize, crop2bbox=False, desc=""):
     """
     Parallelization handler for calculating convolution for density and packing measurements.
-    :param Mask: List of image file names.
-    :param window: String, path to folder where the segmentation images are stored and where the cleaned images will be saved.
-    :param crop2bbox: Boolean, whether to modify image file names with default suffix for cleaned label masks. Default is True. (Default suffix is '_labelmask_cleaned.png')
-    :param desc: List of strings (same length as file_img_list). Each string is used as a label for the sample at the same index.
+    :param Mask: Array to be convolutionally summed for density/packing measurements.
+    :param window: Array, convolutional kernel used for summation in density and packing measurements.
+    :param crop2bbox: Boolean, whether to crop the borders of Mask to non-zero regions, and thus reduce computation time. Default is False.
+    :param desc: String, description to be displayed in tqdm progress bar. Default is "".
     
     :return: Nothing
     """
@@ -883,10 +882,11 @@ def _getPixelDensity(labeledFibers, fiberPropList, onlyFascicleArea=True, fascic
     :param fiberPropList: List, each element describes one labeled fiber (skimage.measure.regionprops). Shape (num_axons).
     :param onlyFascicleArea: Boolean, whether to restrict pixel window measurements to only the window within fascicles.
     :param fascicleAreaMap: Array (same shape as labeledFibers), convolutional measurement of area of windows within fascicles.
-    :param fascicleMask: Bool Array, background labeled 0 and fascicle labeled 1. Shape (H,W)
-    :param window: Array, window to be used for calculating fiber density and packing. Default is (400,400). Must be same size as window used for fascicleAreaMap calculation for measurements to be accurate.
+    :param window: Array, convolutional kernel used for summation in density and packing measurements. Default is a full array of ones with shape (400,400). Must be same as window used for fascicleAreaMap calculation for measurements to be accurate.
     :param imgLinearRes: Float, for the um/px resolution of the image. Default is 0.125.
-    :param chunkSize: 2 Integer Array, descibes the shape of chunks for parallel processing.
+    :param chunkSize: 2 Integer Tuple, descibes the shape of chunks for parallel processing.
+    :param desc: String, description to be displayed in tqdm progress bar. Default is "".
+    
     :return: 2 Arrays, the first containing the fiber density measured around each pixel, the sexond containing the fiber packing measured around each pixel. Each with shape (H,W).
     """
     
@@ -922,10 +922,11 @@ def _getPixelPacking(labeledFibers, onlyFascicleArea=True, fascicleAreaMap=None,
     :param labeledFibers: Array, background labeled 0 and each fiber labeled [1-num_axons]. Shape (H,W).
     :param onlyFascicleArea: Boolean, whether to restrict pixel window measurements to only the window within fascicles.
     :param fascicleAreaMap: Array (same shape as labeledFibers), convolutional measurement of area of windows within fascicles.
-    :param fascicleMask: Bool Array, background labeled 0 and fascicle labeled 1. Shape (H,W)
-    :param window: Array, window to be used for calculating fiber density and packing. Default is (400,400). Must be same size as window used for fascicleAreaMap calculation for measurements to be accurate.
+    :param window: Array, convolutional kernel used for summation in density and packing measurements. Default is a full array of ones with shape (400,400). Must be same as window used for fascicleAreaMap calculation for measurements to be accurate.
     :param imgLinearRes: Float, for the um/px resolution of the image. Default is 0.125.
-    :param chunkSize: 2 Integer Array, descibes the shape of chunks for parallel processing.
+    :param chunkSize: 2 Integer Tuple, descibes the shape of chunks for parallel processing.
+    :param desc: String, description to be displayed in tqdm progress bar. Default is "".
+    
     :return: 2 Arrays, the first containing the fiber density measured around each pixel, the sexond containing the fiber packing measured around each pixel. Each with shape (H,W).
     """
     ## Calculate label packing of window centered on each pixel (labeled area/window area)
@@ -944,13 +945,20 @@ def _getPixelPacking(labeledFibers, onlyFascicleArea=True, fascicleAreaMap=None,
 
 
 
-def _getPixelNNArea(labeledFibers, fiberPropList, axonPropList, imgLinearRes=0.0125, fascicleMask=None):
+def _getPixelNNArea(labeledFibers, fiberPropList, axonPropList, imgLinearRes=0.125, fascicleMask=None):
     """
-    Uses watershed algorithm to associate myelin with individual axons from the interpolated contours between the two masks.
+    Uses watershed algorithm to associate fascicular background pixels with nearest individual fibers/axons (a Voronoi diagram).
+    Then calculates ratio of each fiber/axon area to its Voronoi area.
     :param labeledFibers: Array, background labeled 0 and each fiber labeled [1-num_axons]. Shape (H,W).
-    :param imgLinearRes: Float, for the um/px resolution of the image. Default is 0.0125.
+    :param fiberPropList: List, each element describes one labeled fiber (skimage.measure.regionprops). Shape (num_axons).
+    :param axonPropList: List, each element describes one labeled axon (skimage.measure.regionprops). Shape (num_axons).
+    :param imgLinearRes: Float, for the um/px resolution of the image. Default is 0.125.
     :param fascicleMask: Bool Array (or None), background labeled False and fascicle labeled True. Shape (H,W). If provided, restricts area measurements to only within fascicles. Default is None.
-    :return: Array (shape: num_fibers), returns area (um^2) of image background closest to each cell. If fascicleMask is provided, area is restricted to only within fascicle mask.
+    
+    :return: 3 Arrays each of shape (H,W).
+        - The first is the Voronoi diagram where each pixel of a Voronoi cell is assigned a value equal to the area (um^2) of that Voronoi cell.
+        - The second is the same but the assigned value is instead the fiber area divided by the associated Voronoi cell area.
+        - The third is the same but the assigned value is instead the axon area divided by the associated Voronoi cell area.
     """
     num_fibers = labeledFibers.max()
     isFiber = labeledFibers>0
@@ -1010,6 +1018,47 @@ def _getPixelNNArea(labeledFibers, fiberPropList, axonPropList, imgLinearRes=0.0
 def _getPixelSampleData(path_img, file_img, imgIdx, sampleName_list, dataname_list, axonLabels, myelinLabels, isFascicle, excludeMask_img_list, windowShapes_list,
                         chunkSize, onlyFascicleArea, circularWindow, imgLinearRes, getFiberD, getFiberP, getAxonP, getMyelinP, getGP, getNNratios,
                         useEdgeMask, edgeMask_type, edgeMaskLabels, edgeMask_img_list, save_path, res=1e-100):
+    """
+    Computes metrics for each pixel in image.
+    :param path_img: String, path to folder where the segmentation images are stored and where the cleaned images will be saved.
+    :param file_img: String of image file name.
+    :param imgIdx: Integer for index of image in list of sample names.
+    :param sampleName_list: List of strings. Each string is used as a label for the sample at the same index.
+    :param dataname_list: List of strings. Each string is a label for a measurement being made with the same ordering as the data is stored in the pixel array.
+    :param axonLabels: List of integers used to label axons in semantically segmented image.
+    :param myelinLabels: List of integers used to label axons in semantically segmented image.
+    :param isFascicle: Bool Array, background labeled False and fascicle labeled True. Shape (H,W).
+    :param excludeMask_img_list: List of tuples, each tuple element being an exclusion mask file name (list must have same length as file_img_list, tuples can have any length).
+    :param windowShapes_list: List of 2-element Tuples, 2 integer elements describing the height and width of the window to be used for calculating fiber density and packing.
+    
+    :param chunkSize: 2 Integer Tuple, descibes the shape of chunks for parallel processing.
+    :param onlyFascicleArea: Boolean, whether to restrict measurements to fascicular area denoted in isFascicle.
+    :param circularWindow: Boolean, for whether to use a circular window (with diameter equal to shortest value in windowShape) instead of a rectangle.
+    :param imgLinearRes: Float, for the um/px resolution of the image.
+    :param getFiberD: Boolean, whether to calculate and return fiber density.
+    :param getFiberP: Boolean, whether to calculate and return fiber packing.
+    :param getAxonP: Boolean, whether to calculate and return axon packing.
+    :param getMyelinP: Boolean, whether to calculate and return myelin packing.
+    :param getGP: Boolean, whether to calculate and return g-packing. G-packing is area of axons in a window divided by area of fibers in the same window. Only checked if both getFiberP and getAxonP are True.
+    :param getNNratios: Boolean, whether to calculate and return nearest-neighbor area and ratios.
+    
+    :param useEdgeMask: Boolean, whether to calculate distance of each pixel from edge of masked object.
+    :param edgeMask_type: String, one of {'mask', 'label', None}. This determines how feature information is read for calculating each cell's distance from that feature.
+                          'mask' is used when a separate binary mask is being provided for the feature. 'label' is used when the feature is labeled in images in file_img_list. None is used when no distance is to be calculated. Default is None.
+    :param edgeMask_img_list: List of binary edge mask file names (must have same size as file_img_list). If not empty, calculate the distance of each cell from edges of true labels in mask.
+    :param edgeMaskLabels: List of integers, defining the labels from which to calculate the distance each cell is.
+    :param save_path: String, path to folder where generated files will be saved. If not provided, will save to path_img.
+    :param res: Float, very small value to avoid devide by zero errors when calculating g-packing.
+    
+    :return: Nothing
+    
+    :files generated: 2 zarr files are created for each sample, and 1 txt file shared by all samples
+        - _pixelData.zarr: Zarr array file with shape (num_roi_pixels, num_measures).
+        - _pixelMap.zarr: Zarr array file with shape (num_measures, image_height, image_width).
+        - pixelDataNames.txt: Text file where each line is the name for a measure saved in the zarr files (with the same ordering).
+    """
+    
+    
     cleanImage_pathName = os.path.join(path_img, file_img)
 
     print('')
@@ -1252,14 +1301,14 @@ def getPixelData(file_img_list, path_img, sampleName_list=[], imgLinearRes=0.125
     :param sampleName_list: List of strings (same length as file_img_list). Each string is used as a label for the image at the same index.
     :param imgLinearRes: Float, for the um/px resolution of the image. Default is 0.125.
     :param maskLabels: 3 item list, first item is an integer for the background label, second item is a list of integers for myelin labels, third item is a list of integers for axon labels (labels provided imgs)
-    
     :param windowShapes_list: List of 2-element Tuples, 2 integer elements describing the height and width of the window to be used for calculating fiber density and packing. Default is (400,400).
     
     :param save_path: String, path to folder where generated files will be saved. If not provided, will save to path_img.
+    
     :param fascicleMask_img_list: List of fascicle mask file names (must have same length as file_img_list).
-    :param onlyFascicleArea: Default is True.
-    :param excludeMask_img_list: List of tuples, each tuple element being an exclusion mask file name (list must have same length as file_img_list, tuples can have any length).
-    :param circularWindow: Boolean, for whether to use a circular window (with diamter eqaul to shortest value in windowShape) instead of a rectangle.
+    :param onlyFascicleArea: Boolean, whether to restrict measurements to fascicular area denoted in fascicleMAsk. Default is True.
+    :param excludeMask_img_list: None or a List of tuples, each tuple element being an exclusion mask file name (list must have same length as file_img_list, tuples can have any length).
+    :param circularWindow: Boolean, for whether to use a circular window (with diameter equal to shortest value in windowShape) instead of a rectangle.
     
     :param edgeMask_type: String, one of {'mask', 'label', None}. This determines how feature information is read for calculating each cell's distance from that feature.
                           'mask' is used when a separate binary mask is being provided for the feature. 'label' is used when the feature is labeled in images in file_img_list. None is used when no distance is to be calculated. Default is None.
@@ -1268,13 +1317,13 @@ def getPixelData(file_img_list, path_img, sampleName_list=[], imgLinearRes=0.125
     :param edgeDist_Name: String, name to label edgeMask distance data.
     
     :param num_cpus: Number of cpu's to use for parallel processing. Default is 10.
-    :param chunkSize: 2 Integer Array, descibes the shape of chunks for parallel processing.
+    :param chunkSize: 2 Integer Array, descibes the shape of chunks for parallel processing. Default is (3000,3000).
     
     :param getFiberD: Boolean, whether to calculate and return fiber density. Default is True.
     :param getFiberP: Boolean, whether to calculate and return fiber packing. Default is True.
     :param getAxonP: Boolean, whether to calculate and return axon packing. Default is True.
     :param getMyelinP: Boolean, whether to calculate and return myelin packing. Default is True.
-    :param getGP: Boolean, whether to calculate and return g-packing. Only checked if both getFiberP and getAxonP are True. Default is True.
+    :param getGP: Boolean, whether to calculate and return g-packing. G-packing is area of axons in a window divided by area of fibers in the same window. Only checked if both getFiberP and getAxonP are True.
     :param getNNratios: Boolean, whether to calculate and return nearest-neighbor area and ratios. Default is True.
     :param res: Float, very small value to avoid devide by zero errors when calculating g-packing.
     

@@ -28,7 +28,7 @@ def loadCellSamples(data_path, cellData_list, dataname_list_file, cellCounts_lis
     :param data_path: String, path to folder where the data and cell count zarr arrays and dataname txt file are saved.
     :param cellData_list: List of strings of names of cell data zarr arrays.
     :param dataname_list_file: String of name of txt file containing list of names of measured data.
-    :param cellCounts_list: List of strings of names of cell count zarr arrays.
+    :param cellCounts_list: None or a List of strings of names of cell count zarr arrays. Default is None.
     :return: 3 Lists (each length = # samples) containing the respective cell data arrays, cell data measurement names, and cell counts for each sample.
     """
     
@@ -66,7 +66,7 @@ def loadCellSamples(data_path, cellData_list, dataname_list_file, cellCounts_lis
 
 def loadPixelSamples(data_path, pixelData_list, dataname_list_file):
     """
-    Gets lists of samples' measurement data
+    Gets lists of samples' pixel-wise measurement data
     :param data_path: String, path to folder where the data zarr arrays and dataname txt file are saved.
     :param pixelData_list: List of strings of names of pixel data zarr arrays.
     :param dataname_list_file: String of name of txt file containing list of names of measured data.
@@ -105,15 +105,15 @@ def trainRegs(samplesList_dataArray, sampleName_list, sampleIdx_list, sampleRegT
               train_ratio=0.7, equalTrainingSampleSize=False, max_iter=5000, tol=1e-12,
               save_path='', saveValidationData=False):
     """
-    Trains svm models to each fit a regression (1 for effect of impantation, and for effect of stimulation 1 for each stimulation target value).
+    Trains svm models to each fit a regression (1 for effect of implantation, and for effect of stimulation 1 for each stimulation target value).
     :param samplesList_dataArray: List (length = # samples) containing the respective pixel data arrays.
-    :param sampleName_list: List of strings (same length as file_img_list). Each string is used as a label for the image at the same index.
+    :param sampleName_list: List of strings (same length as samplesList_dataArray). Each string is used as a label for the sample at the same index.
     :param sampleIdx_list: List of sample indices to be drawn from for fitting.
     :param sampleRegTargetVal_list_list: List of sublists of numbers (list length = # of regressions models to fit, sublist length = # samples); each number is a target value for a sample to which the model will try and fit.
     :param sampleRegBool_list_list: List of sublists of booleans (list length = # of regressions models to fit, sublist length = # samples); each boolean is whether to include a sample in the regression model training.
     :param featureIdx_list_list: List of sublists of integers; each sublist is a set of indices for features to use in model training.
     :param targetValueName_list: List of strings (length equal to sampleRegTargetVal_list_list) with names for each target value type.
-    :param featureGroupName_list: List of strings (length equal to featureIdx_list_list) with names for each feature set.
+    :param feature_groupName_list: List of strings (length equal to featureIdx_list_list) with names for each feature set.
     
     :param train_ratio: Float (between 0 and 1) for the fraction of each sample to use in training (the rest is used in validation). Default is 0.7 (meaning 30% is saved for validation)
     :param equalTrainingSampleSize: Boolean for whether to have each sample provide the same number points for training (results in only the smallest sample providing the full train_ratio percent of its data for training). Default is False.
